@@ -1,121 +1,97 @@
+from flask import Flask, request, render_template_string
 from transformers import pipeline
-import gradio as gr
 
-# Load GPT-2
+app = Flask(__name__)
+
+# Load GPT-2 model
 generator = pipeline(
     "text-generation",
     model="gpt2"
 )
 
-# Generate Function
-def generate_text(prompt):
-
-    if not prompt.strip():
-        return "⚠️ Please enter a topic."
-
-    formatted_prompt = f"Write a meaningful paragraph about: {prompt}"
-
-    result = generator(
-        formatted_prompt,
-        max_new_tokens=250,
-        temperature=0.8,
-        do_sample=True,
-        top_k=50,
-        top_p=0.95,
-        repetition_penalty=1.2,
-        pad_token_id=50256
-    )
-
-    return result[0]["generated_text"]
-
-
-# Custom Styling
-custom_css = """
-body {
-    font-family: 'Segoe UI', sans-serif;
-}
-
-.gradio-container {
-    max-width: 1000px !important;
-    margin: auto;
-}
-
-.main-title {
-    text-align: center;
-    font-size: 38px;
-    font-weight: bold;
-    margin-bottom: 10px;
-}
-
-.sub-title {
-    text-align: center;
-    color: gray;
-    margin-bottom: 25px;
-}
-
-.footer {
-    text-align: center;
-    color: gray;
-    margin-top: 20px;
-}
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Text Generator</title>
+    <style>
+        body{
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        h1{
+            text-align:center;
+        }
+        textarea{
+            width:100%;
+            padding:10px;
+            margin-top:10px;
+        }
+        button{
+            margin-top:10px;
+            padding:10px 20px;
+            cursor:pointer;
+        }
+        input{
+            padding:5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Text Generator</h1>
+    <form method="POST">
+        <label>Enter Prompt:</label><br>
+        <textarea name="prompt" rows="6" required>{{ prompt }}</textarea>
+        <br><br>
+        <label>Temperature:</label>
+        <input
+            type="number"
+            name="temperature"
+            min="0.7"
+            max="1.0"
+            step="0.1"
+            value="{{ temperature }}"
+        >
+        <br><br>
+        <button type="submit">Generate Text</button>
+    </form>
+    {% if output %}
+    <h3>Generated Text:</h3>
+    <textarea rows="12" readonly>{{ output }}</textarea>
+    {% endif %}
+</body>
+</html>
 """
 
-# UI
-with gr.Blocks(css=custom_css, theme=gr.themes.Soft()) as demo:
+@app.route("/", methods=["GET", "POST"])
+def home():
+    output = ""
+    prompt = ""
+    temperature = 0.8
 
-    gr.HTML("""
-        <div class='main-title'>
-            🤖 GPT-2 Text Generator
-        </div>
+    if request.method == "POST":
+        prompt = request.form["prompt"]
+        temperature = float(request.form["temperature"])
 
-        <div class='sub-title'>
-            Generate meaningful content using Hugging Face GPT-2
-        </div>
-    """)
+        result = generator(
+            prompt,
+            max_new_tokens=250,
+            temperature=temperature,
+            do_sample=True,
+            top_k=50,
+            top_p=0.95
+        )
 
-    with gr.Row():
+        output = result[0]["generated_text"]
 
-        with gr.Column(scale=1):
-
-            prompt = gr.Textbox(
-                label="Enter Topic",
-                lines=6,
-                placeholder="Example: Artificial Intelligence, Climate Change, Space Exploration..."
-            )
-
-            generate_btn = gr.Button(
-                "✨ Generate Content",
-                variant="primary"
-            )
-
-            clear_btn = gr.Button("🗑 Clear")
-
-        with gr.Column(scale=1):
-
-            output = gr.Textbox(
-                label="Generated Text",
-                lines=18,
-                show_copy_button=True
-            )
-
-    generate_btn.click(
-        fn=generate_text,
-        inputs=prompt,
-        outputs=output
+    return render_template_string(
+        HTML,
+        output=output,
+        prompt=prompt,
+        temperature=temperature
     )
 
-    clear_btn.click(
-        lambda: ("", ""),
-        outputs=[prompt, output]
-    )
-
-    gr.HTML("""
-        <div class='footer'>
-            Built using GPT-2 • Hugging Face Transformers • Gradio
-        </div>
-    """)
-
-demo.launch(
-    server_name="0.0.0.0",
-    server_port=7860
-)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=7860)
